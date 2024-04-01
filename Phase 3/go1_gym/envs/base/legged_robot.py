@@ -40,6 +40,10 @@ class LeggedRobot(BaseTask):
         self.initial_dynamics_dict = initial_dynamics_dict
         if eval_cfg is not None: self._parse_cfg(eval_cfg)
         self._parse_cfg(self.cfg)
+        self.obstacle_s_length = []
+        self.obstacle_s_thickness= []
+        self.obstacle_s_wall_pos_x = []
+        self.obstacle_s_wall_pos_y = []
 
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless, self.eval_cfg)
 
@@ -56,6 +60,7 @@ class LeggedRobot(BaseTask):
         self.record_eval_now = False
         self.collecting_evaluation = False
         self.num_still_evaluating = 0
+
 
     def step(self, actions):
         """ Apply actions, simulate, call self.post_physics_step()
@@ -250,12 +255,11 @@ class LeggedRobot(BaseTask):
             return
 
         env_ids_int32 = env_ids.to(dtype=torch.int32).to(self.device)
-
+        num_wall_bodies = 5
         # joints
         if dof_pos is not None:
             self.dof_pos[env_ids] = dof_pos
-            self.dof_vel[env_ids] = 0.
-            num_wall_bodies = 4
+            self.dof_vel[env_ids] = 0.            
             self.gym.set_dof_state_tensor_indexed(self.sim,
                                                   gymtorch.unwrap_tensor(self.dof_state),
                                                   gymtorch.unwrap_tensor(env_ids_int32 *(num_wall_bodies + 1)),
@@ -263,7 +267,6 @@ class LeggedRobot(BaseTask):
 
         # base position
         self.root_states[env_ids] = base_state.to(self.device)
-        num_wall_bodies = 4
         # Todo : Update only the robot details here
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self._merge_anymal_root_state_with_wall_root_state()),
@@ -968,7 +971,7 @@ class LeggedRobot(BaseTask):
         self.dof_vel[env_ids] = 0.
 
         env_ids_int32 = env_ids.to(dtype=torch.int32)
-        num_wall_bodies = 4 
+        num_wall_bodies = 5 
         self.gym.set_dof_state_tensor_indexed(self.sim,
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(env_ids_int32 * (num_wall_bodies + 1)) ,
@@ -1024,7 +1027,7 @@ class LeggedRobot(BaseTask):
                                                            device=self.device)  # [7:10]: lin vel, [10:13]: ang vel
         env_ids_int32 = env_ids.to(dtype=torch.int32)
         # Todo should you update the robot states here
-        num_wall_bodies = 4
+        num_wall_bodies = 5
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self._merge_anymal_root_state_with_wall_root_state()),
                                                      gymtorch.unwrap_tensor(env_ids_int32 *(num_wall_bodies +1)),
@@ -1163,14 +1166,14 @@ class LeggedRobot(BaseTask):
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
-        num_wall_bodies = 4
         # create some wrapper tensors for different slices
         # self.root_states = gymtorch.wrap_tensor(actor_root_state)
         # print( "INIT BUFFER dof_state tensor :::::: " , self.root_states )
-        self.root_states = gymtorch.wrap_tensor(actor_root_state)[::5]
-        self.wall_root_state = gymtorch.wrap_tensor(actor_root_state)[1::5]
-        for i in range(2, 5):
-            self.wall_root_state = torch.cat((self.wall_root_state , gymtorch.wrap_tensor(actor_root_state)[i::5]))        
+        num_wall_bodies =  5
+        self.root_states = gymtorch.wrap_tensor(actor_root_state)[::num_wall_bodies+1]
+        self.wall_root_state = gymtorch.wrap_tensor(actor_root_state)[1::num_wall_bodies+1]
+        for i in range(2, num_wall_bodies +1):
+            self.wall_root_state = torch.cat((self.wall_root_state , gymtorch.wrap_tensor(actor_root_state)[i::num_wall_bodies+1]))        
         # similarly update the dof state
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.net_contact_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * (self.num_bodies + num_wall_bodies), :]
@@ -1525,10 +1528,11 @@ class LeggedRobot(BaseTask):
 
     def _merge_anymal_root_state_with_wall_root_state(self):
         res = []
+        num_wall_bodies = 5 
         for i,t in enumerate(self.root_states):
             res.append(t)
-            itr_index = i * 4
-            for j in range(itr_index , itr_index + 4 ): 
+            itr_index = i * num_wall_bodies
+            for j in range(itr_index , itr_index + num_wall_bodies ): 
                 res.append(self.wall_root_state[j])
         resTorch = torch.empty([len(res) , res[0].size()[0]] , device = self.device)
         return torch.stack(res , out = resTorch)
@@ -1544,6 +1548,7 @@ class LeggedRobot(BaseTask):
     #     return torch.stack(res , out = resTorch)
 
     def _add_boundary_walls_to_env(self , env_handle , i , origins) :
+        import random
         asset_options = gymapi.AssetOptions()
         wall_thickness = 0.1
         side_wall_length = 5
@@ -1551,7 +1556,12 @@ class LeggedRobot(BaseTask):
         asset_options.fix_base_link = True
         asset_box1 = self.gym.create_box(self.sim, side_wall_length , wall_thickness , wall_height , asset_options)
         asset_box2 = self.gym.create_box(self.sim, 2*wall_thickness + 2 ,  wall_thickness , wall_height, asset_options)
-    
+        obstacle_thickness = round(random.uniform(0.3, 1.5),2)
+        obstacle_length = 0.4
+        asset_box3 = self.gym.create_box(self.sim, obstacle_length , obstacle_thickness , 1, asset_options)
+        
+        self.obstacle_s_thickness.append(obstacle_thickness)
+        self.obstacle_s_length.append(obstacle_length)
 
         # add box actor
         pose = gymapi.Transform()
@@ -1604,6 +1614,34 @@ class LeggedRobot(BaseTask):
         shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle4)
         shape_props[0].compliance = 0.1
         self.gym.set_actor_rigid_shape_properties(env_handle, box_handle4, shape_props)
+
+        #adding fifth box that is an obstacle inside the walls
+        pose = gymapi.Transform()
+        obstacle_wall_pos_x = round(random.uniform(0.8, 2.5))
+        #assume that the robot is about 0.4 m in width 
+        if obstacle_thickness > 1.2:
+            remaining_gap = 2 - obstacle_thickness - 0.4
+            left_possibility = round(random.uniform(-1+ obstacle_thickness/2, -1 + obstacle_thickness/2 + remaining_gap),2)
+            right_possibility = round( random.uniform(1 - obstacle_thickness/2 - remaining_gap ,1 - obstacle_thickness/2 ),2)
+            if random.choice([0, 1]) == 0 :
+                obstacle_wall_pos_y = left_possibility
+            else :
+                obstacle_wall_pos_y = right_possibility
+        else:
+            obstacle_wall_pos_y = round(random.uniform(-1 + obstacle_thickness/2 , 1 - obstacle_thickness/2), 2)
+        
+        self.obstacle_s_wall_pos_x.append(obstacle_wall_pos_x)
+        self.obstacle_s_wall_pos_y.append(obstacle_wall_pos_y)
+        obstacle_wall_pos = torch.tensor([ obstacle_wall_pos_x, obstacle_wall_pos_y  ,0.5  ] , device = self.device) + origins
+        pose.p = gymapi.Vec3(*obstacle_wall_pos)
+        pose.r = gymapi.Quat(0, 0, 0, 1)
+        box_handle5 = self.gym.create_actor(env_handle, asset_box3, pose, "obstacle", i, 0)
+        self.actor_handles.append(box_handle5)
+
+        # set restitution for box actor
+        shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle5)
+        shape_props[0].compliance = 0.1
+        self.gym.set_actor_rigid_shape_properties(env_handle, box_handle5, shape_props)
 
 
     def _create_envs(self):
@@ -1714,13 +1752,13 @@ class LeggedRobot(BaseTask):
                                                                                       penalized_contact_names[i])
         # adding walls to the termination on contact list
         # termination_contact_names.extend(["leftwall" , "rightwall" , "backwall" , "frontwall"])
-        num_walls = 4       
+        num_wall_bodies = 5      
         self.termination_contact_indices = torch.zeros(len(termination_contact_names), dtype=torch.long,
                                                        device=self.device, requires_grad=False)
         for i in range(len(termination_contact_names)):
             self.termination_contact_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0],
                                                                                             self.actor_handles[0],termination_contact_names[i])
-        self.wall_contact_indices = [x for x in range(num_walls)]
+        self.wall_contact_indices = [x for x in range(num_wall_bodies)]
         
         # print("_create_envs find_actor_rigid_body_handle" , self.gym.find_actor_rigid_body_handle(self.envs[0], 
         #                 self.actor_handles[0] , termination_contact_names[1]))

@@ -35,7 +35,7 @@ def train_go1(headless=True):
   env = HistoryWrapper(env)
   gpu_id = 0
   runner = Runner(env, device=f"cuda:{gpu_id}")
-  num_learning_iterations = 50
+  num_learning_iterations = 30000
   runner.learn(num_learning_iterations=num_learning_iterations, init_at_random_ep_len=True, eval_freq=100)
   
   # print("THE AVERAGE REWARDS THAT IS SEEN IS " , runner.reward_plot_tracker_per_iteration)

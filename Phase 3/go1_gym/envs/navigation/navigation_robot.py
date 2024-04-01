@@ -480,6 +480,7 @@ class NavigationRobot:
             self.obs_buf = torch.cat((self.obs_buf,
                                       self.last_actions), dim=-1)
 
+
         # if self.cfg.env.observe_timing_parameter:
         #     self.obs_buf = torch.cat((self.obs_buf,
         #                               self.gait_indices.unsqueeze(1)), dim=-1)
@@ -522,6 +523,13 @@ class NavigationRobot:
         #     self.obs_buf = torch.cat((self.obs_buf, (self.contact_forces[:, self.feet_indices, 2] > 1.).view(
         #         self.num_envs,
         #         -1) * 1.0), dim=1)
+        
+        if self.cfg.env.observe_obstacle_states:
+            self.obs_buf = torch.cat((self.obs_buf , 
+            torch.tensor(self.locomotion_env.obstacle_s_wall_pos_x, device = self.device).unsqueeze(1) , 
+            torch.tensor(self.locomotion_env.obstacle_s_wall_pos_y , device = self.device).unsqueeze(1), 
+            torch.tensor(self.locomotion_env.obstacle_s_length , device = self.device).unsqueeze(1) ,
+            torch.tensor(self.locomotion_env.obstacle_s_thickness , device = self.device).unsqueeze(1) ) , dim = -1)
 
         # add noise if needed
         if self.add_noise:
@@ -1280,6 +1288,8 @@ class NavigationRobot:
             noise_vec = torch.cat((noise_vec,
                                    torch.zeros(1),
                                    ), dim=0)
+        if self.cfg.env.observe_obstacle_states:
+            noise_vec = torch.cat((noise_vec, torch.zeros(1),torch.zeros(1),torch.zeros(1),torch.zeros(1)) , dim = 0)
 
         # if self.cfg.env.observe_contact_states: #contact forces used for termination
         #     noise_vec = torch.cat((noise_vec,
@@ -1604,7 +1614,7 @@ class NavigationRobot:
         # prepare list of functions
         self.reward_functions = []
         self.reward_names = []
-        print("REWARD_SCALES ITEMS", self.reward_scales.items())
+        # print("REWARD_SCALES ITEMS", self.reward_scales.items())
         for name, scale in self.reward_scales.items():
             if name == "termination":
                 continue

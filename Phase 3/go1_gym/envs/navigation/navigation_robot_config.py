@@ -5,9 +5,9 @@ from params_proto import PrefixProto, ParamsProto
 # TODO : merge both files from mail and this 
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
-        num_envs = 10 #4096
-        num_observations = 10
-        num_scalar_observations = 10
+        num_envs = 4096 #4096
+        num_observations = 14 # 10
+        num_scalar_observations = 14 #10
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
         num_privileged_obs = 0
         # num_actions = 12
@@ -24,7 +24,7 @@ class Cfg(PrefixProto, cli=False):
         observe_only_lin_pos = False # ***
         observe_two_prev_actions = True
         observe_yaw = True
-
+        observe_obstacle_states = True
         # observe_contact_states = False
         observe_command = True
         # observe_height_command = False
