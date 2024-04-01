@@ -5,9 +5,9 @@ import torch.nn.functional as F
 import numpy as np
 from params_proto import PrefixProto
 
-from go1_gym_learn.ppo_cse import ActorCritic
-from go1_gym_learn.ppo_cse import RolloutStorage
-from go1_gym_learn.ppo_cse import caches
+from go1_gym_learn.ppo_cse_nav import ActorCritic
+from go1_gym_learn.ppo_cse_nav import RolloutStorage
+from go1_gym_learn.ppo_cse_nav import caches
 
 
 class PPO_Args(PrefixProto):
@@ -79,7 +79,7 @@ class PPO:
     def process_env_step(self, rewards, dones, infos):
         self.transition.rewards = rewards.clone()
         self.transition.dones = dones
-        self.transition.env_bins = infos["env_bins"]
+        # self.transition.env_bins = infos["env_bins"]
         # Bootstrapping on time outs
         if 'time_outs' in infos:
             self.transition.rewards += PPO_Args.gamma * torch.squeeze(
@@ -105,7 +105,7 @@ class PPO:
         mean_decoder_test_loss_student = 0
         generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
         for obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
-            old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
+            old_mu_batch, old_sigma_batch, masks_batch in generator:
 
             self.actor_critic.act(obs_history_batch, masks=masks_batch)
             actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)

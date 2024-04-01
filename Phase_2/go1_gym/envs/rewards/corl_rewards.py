@@ -4,21 +4,80 @@ from go1_gym.utils.math_utils import quat_apply_yaw, wrap_to_pi, get_scale_shift
 from isaacgym.torch_utils import *
 from isaacgym import gymapi
 
+@torch.jit.script
+def quat_vector_cosine(q, v):
+    """
+    Compute the cosine of the angle between a quaternion and a vector.
+
+    Parameters:
+    - q (Tensor): Input quaternion representing the rotation.
+    - v (Tensor): Input vector representing the direction.
+
+    Returns:
+    - Tensor: Cosine of the angle between the quaternion and the vector.
+    """
+    # Normalize quaternion and vector
+    q_normalized = quat_unit(q)
+    v_normalized = normalize(v)
+
+    # Rotate the vector by the quaternion
+    v_rotated = quat_rotate_inverse(q_normalized, v_normalized)
+
+    # Compute the dot product between the rotated vector and the original vector
+    dot_product = torch.sum(v_normalized * v_rotated, dim=-1)
+
+    return dot_product
+
 class CoRLRewards:
     def __init__(self, env):
         self.env = env
+        self.required_x_pos = 3
+        self.required_y_pos = 0
+        self.device = env.device
 
     def load_env(self, env):
         self.env = env
 
-    # ------------ reward functions----------------
-    def __reward_tracking_lin_pos(self):
+    # ------------ Navigation reward functions----------------
+    
+    def _reward_tracking_lin_pos(self):
         # Tracking of linear velocity commands (xy axes)
-        lin_pos_error = torch.sum(torch.square(self.env.commands[:, :2] - self.env.base_pos[:, :2]), dim=1)
-        return torch.exp(-lin_pos_error / self.env.cfg.rewards.tracking_sigma)
+        # print("Commands : ", self.env.commands[:,:1] , "basePos :" , self.env.base_pos[:, :1])
+        # print("base_pos , env_origins:",self.env.base_pos[:, 0] , self.env.env_origins[:,0])
+        lin_pos_error = torch.sum(torch.square(self.required_x_pos - (self.env.base_pos[:, :1] - self.env.env_origins[:,:1])), dim =1)
+        # print("Lin _pos _error:", lin_pos_error , lin_pos_error.size())
+        # print("Reward :", torch.exp(-lin_pos_error / self.env.cfg.rewards.tracking_sigma))        
+        func_reward = torch.exp(-lin_pos_error / (self.env.cfg.rewards.tracking_sigma ))
+        return func_reward
 
+    def _reward_goal_body_alignment(self):
+        goal_direction = torch.tensor([self.required_x_pos,self.required_y_pos] , device = self.device) - (self.env.base_pos[:, :2] -self.env.env_origins[:,:2]) 
+        goal_direction = torch.nn.functional.pad(goal_direction, (0, 1), mode='constant', value=0)
+        # print(f'_reward_goal_body_alignment: {quat_vector_cosine(self.env.base_quat, goal_direction)}')
+        func_reward = quat_vector_cosine(self.env.base_quat, goal_direction)
+        return func_reward
+
+    def _reward_action_magnitude(self):
+        # Penalize changes in actions
+        mag = torch.sqrt(torch.sum(torch.square(self.env.actions) , dim = 1))
+        error = torch.square(mag - 1)
+        return torch.exp(-error / (self.env.cfg.rewards.tracking_sigma) )
+ 
+    # # additional reward for magnitude of base_lin_vel in the direction of goal
+    # def _reward_direct_navigation(self):
+    #     goal_direction = self.env.commands[:, :2] - self.env.base_pos[:, :2]
+    #     goal_direction = torch.nn.functional.pad(goal_direction, (0, 1), mode='constant', value=0)
+    #     cosine = quat_vector_cosine(self.env.base_quat, goal_direction)
+
+    #     velocity_magnitude = torch.sum(torch.square(self.env.locomotion_env.base_lin_vel[:, :2]), dim=1)
+    #     print(f'_reward_direct_navigation: {cosine * velocity_magnitude}')
+    #     return cosine * velocity_magnitude
+
+
+    # ------------Locomotion reward functions----------------
     def _reward_tracking_lin_vel(self):
         # Tracking of linear velocity commands (xy axes)
+        # print( "command vel , base_lin_vel" ,self.env.commands[:, :2],  self.env.base_lin_vel[:, :2] )
         lin_vel_error = torch.sum(torch.square(self.env.commands[:, :2] - self.env.base_lin_vel[:, :2]), dim=1)
         return torch.exp(-lin_vel_error / self.env.cfg.rewards.tracking_sigma)
 

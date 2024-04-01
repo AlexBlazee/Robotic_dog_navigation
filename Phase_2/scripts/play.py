@@ -20,6 +20,8 @@ def load_policy(logdir):
     adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_latest.jit')
 
     def policy(obs, info={}):
+        print(obs["obs_history"])
+        print(obs["obs_history"].size())
         i = 0
         latent = adaptation_module.forward(obs["obs_history"].to('cpu'))
         action = body.forward(torch.cat((obs["obs_history"].to('cpu'), latent), dim=-1))
@@ -122,10 +124,9 @@ def play_go1(headless=True):
     y_vel_cmd_array = np.zeros(num_eval_steps)
     yaw_vel_cmd_array = np.zeros(num_eval_steps)
     for i in range(num_eval_steps):
-        if i<250:
-            x_vel_cmd_array[i] = 1.0
-        else:
-            x_vel_cmd_array[i] = -0.5
+            x_vel_cmd_array[i] = 6.0
+            y_vel_cmd_array[i] = -1.0
+            yaw_vel_cmd_array[i] = 1.0
 
         # if i<100:
         #     x_vel_cmd_array[i] = 0.4
@@ -163,6 +164,7 @@ def play_go1(headless=True):
     for i in tqdm(range(num_eval_steps)):
         with torch.no_grad():
             actions = policy(obs)
+            print("actions ", actions)
         env.commands[:, 0] = x_vel_cmd_array[i]
         env.commands[:, 1] = y_vel_cmd_array[i]
         env.commands[:, 2] = yaw_vel_cmd_array[i]
@@ -175,7 +177,6 @@ def play_go1(headless=True):
         env.commands[:, 11] = roll_cmd
         env.commands[:, 12] = stance_width_cmd
         obs, rew, done, info = env.step(actions)
-        print("BUFFERS :", obs , rew, done , info )
 
         measured_x_vels[i] = env.base_lin_vel[0, 0]
         measured_y_vels[i] = env.base_lin_vel[0 ,1]

@@ -12,7 +12,7 @@ from go1_gym.envs.navigation.navigation_robot_config import Cfg
 class PositionTrackingEasyEnv(NavigationRobot):
     def __init__(self, sim_device, headless, num_envs=None, prone=False, deploy=False,
                  cfg: Cfg = None, eval_cfg: Cfg = None, initial_dynamics_dict=None, physics_engine="SIM_PHYSX"):
-        print("Entered Position Navigation ")
+
         if num_envs is not None:
             cfg.env.num_envs = num_envs
 
@@ -41,7 +41,7 @@ class PositionTrackingEasyEnv(NavigationRobot):
             # "foot_positions": (self.foot_positions).detach().cpu().numpy().copy(),
             # "body_pos": self.root_states[:, 0:3].detach().cpu().numpy(),
             "body_pos": self.root_states[:, 0:2].detach().cpu().numpy(),  # taking only x,y coordinates
-            "body_pos_cmd" : self.commands.cpu().numpy()[:, 0:2],    # NEW ADD
+            # "body_pos_cmd" : self.commands.cpu().numpy()[:, 0:2],    # NEW ADD
             "body_yaw" : self.root_states[:,3:7].detach().cpu().numpy() # NEW ADD # NOT SURE IF NNEDED
             # "torques": self.torques.detach().cpu().numpy()
         })

@@ -10,10 +10,6 @@ from params_proto import PrefixProto
 from .actor_critic import ActorCritic
 from .rollout_storage import RolloutStorage
 
-# TODO : change the runs to nav_runs for navigation policy
-# TODO : verify the curriculum related chnages made 
-# TODO : check if this new file creation is necessary just to updat the path : Train changed to "nav_runs" 
-
 
 def class_to_dict(obj) -> dict:
     if not hasattr(obj, "__dict__"):
@@ -60,7 +56,7 @@ class RunnerArgs(PrefixProto, cli=False):
     load_run = -1  # -1 = last run
     checkpoint = -1  # -1 = last saved model
     resume_path = None  # updated from load_run and chkpt
-    resume_curriculum = True
+    resume_curriculum = False
 
 
 class Runner:
@@ -84,9 +80,7 @@ class Runner:
                                prefix=RunnerArgs.resume_path)
             weights = loader.load_torch("checkpoints/ac_weights_last.pt")
             actor_critic.load_state_dict(state_dict=weights)
-            
-            # TODO : Check if the resume_curriculum should be True or False
-            # we need to use single curriculum . not multiple
+
             if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
                 # load curriculum state
                 distributions = loader.load_pkl("curriculum/distribution.pkl")
@@ -107,7 +101,8 @@ class Runner:
         self.tot_time = 0
         self.current_learning_iteration = 0
         self.last_recording_it = 0
-
+        self.reward_plot_tracker_per_iteration = {}
+        self.success_plot_tracker_per_iteration = []
         self.env.reset()
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False, eval_freq=100, curriculum_dump_freq=500, eval_expert=False):
@@ -138,8 +133,12 @@ class Runner:
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
         tot_iter = self.current_learning_iteration + num_learning_iterations
+        
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
+            # Rewards and success Plot tracking:
+            Rewards_plot_tracker_per_runner_arg_steps = {}
+            Succes_plot_tracker_per_runner_arg_steps = []
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
@@ -158,6 +157,16 @@ class Runner:
                     obs, privileged_obs, obs_history, rewards, dones = obs.to(self.device), privileged_obs.to(
                         self.device), obs_history.to(self.device), rewards.to(self.device), dones.to(self.device)
                     self.alg.process_env_step(rewards[:num_train_envs], dones[:num_train_envs], infos)
+                    
+                    for key in infos["train/episode"].keys():
+                        if key in Rewards_plot_tracker_per_runner_arg_steps:
+                            Rewards_plot_tracker_per_runner_arg_steps[key].extend([infos["train/episode"][key].item()])
+                        else:
+                            Rewards_plot_tracker_per_runner_arg_steps[key]= [infos["train/episode"][key].item()]
+                    
+                    Succes_plot_tracker_per_runner_arg_steps.extend([sum(infos["train/success_counts"].cpu().numpy().astype(int))])
+                    # print(infos["train/success_counts"].cpu().numpy().astype(int))
+                    # print(infos["body_pos"])
 
                     if 'train/episode' in infos:
                         with logger.Prefix(metrics="train/episode"):
@@ -167,29 +176,28 @@ class Runner:
                         with logger.Prefix(metrics="eval/episode"):
                             logger.store_metrics(**infos['eval/episode'])
 
-                    # TODO : check if you 'curriculum' is necessary " VISIT FUNCTION LATER "
-                    if 'curriculum' in infos:
+                    # if 'curriculum' in infos:
 
-                        cur_reward_sum += rewards
-                        cur_episode_length += 1
+                    #     cur_reward_sum += rewards
+                    #     cur_episode_length += 1
 
-                        new_ids = (dones > 0).nonzero(as_tuple=False)
+                    #     new_ids = (dones > 0).nonzero(as_tuple=False)
 
-                        new_ids_train = new_ids[new_ids < num_train_envs]
-                        rewbuffer.extend(cur_reward_sum[new_ids_train].cpu().numpy().tolist())
-                        lenbuffer.extend(cur_episode_length[new_ids_train].cpu().numpy().tolist())
-                        cur_reward_sum[new_ids_train] = 0
-                        cur_episode_length[new_ids_train] = 0
+                    #     new_ids_train = new_ids[new_ids < num_train_envs]
+                    #     rewbuffer.extend(cur_reward_sum[new_ids_train].cpu().numpy().tolist())
+                    #     lenbuffer.extend(cur_episode_length[new_ids_train].cpu().numpy().tolist())
+                    #     cur_reward_sum[new_ids_train] = 0
+                    #     cur_episode_length[new_ids_train] = 0
 
-                        new_ids_eval = new_ids[new_ids >= num_train_envs]
-                        rewbuffer_eval.extend(cur_reward_sum[new_ids_eval].cpu().numpy().tolist())
-                        lenbuffer_eval.extend(cur_episode_length[new_ids_eval].cpu().numpy().tolist())
-                        cur_reward_sum[new_ids_eval] = 0
-                        cur_episode_length[new_ids_eval] = 0
-                    # TODO : check if the its valid . cause we commented the code above line 85
-                    if 'curriculum/distribution' in infos:
-                        distribution = infos['curriculum/distribution']
+                    #     new_ids_eval = new_ids[new_ids >= num_train_envs]
+                    #     rewbuffer_eval.extend(cur_reward_sum[new_ids_eval].cpu().numpy().tolist())
+                    #     lenbuffer_eval.extend(cur_episode_length[new_ids_eval].cpu().numpy().tolist())
+                    #     cur_reward_sum[new_ids_eval] = 0
+                    #     cur_episode_length[new_ids_eval] = 0
 
+                    # if 'curriculum/distribution' in infos:
+                    #     distribution = infos['curriculum/distribution']
+           
                 stop = time.time()
                 collection_time = stop - start
 
@@ -197,16 +205,24 @@ class Runner:
                 start = stop
                 self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
 
-                if it % curriculum_dump_freq == 0:
-                    logger.save_pkl({"iteration": it,
-                                     **caches.slot_cache.get_summary(),
-                                     **caches.dist_cache.get_summary()},
-                                    path=f"curriculum/info.pkl", append=True)
-                    # TODO : check if the its valid . cause we commented the code above line 85
-                    if 'curriculum/distribution' in infos:
-                        logger.save_pkl({"iteration": it,
-                                         "distribution": distribution},
-                                         path=f"curriculum/distribution.pkl", append=True)
+                # if it % curriculum_dump_freq == 0:
+                #     logger.save_pkl({"iteration": it,
+                #                      **caches.slot_cache.get_summary(),
+                #                      **caches.dist_cache.get_summary()},
+                #                     path=f"curriculum/info.pkl", append=True)
+
+                #     if 'curriculum/distribution' in infos:
+                #         logger.save_pkl({"iteration": it,
+                #                          "distribution": distribution},
+                #                          path=f"curriculum/distribution.pkl", append=True)
+
+            for key in Rewards_plot_tracker_per_runner_arg_steps.keys():
+                if key in self.reward_plot_tracker_per_iteration:
+                    self.reward_plot_tracker_per_iteration[key].extend([sum(Rewards_plot_tracker_per_runner_arg_steps[key])/self.num_steps_per_env])
+                else:
+                    self.reward_plot_tracker_per_iteration[key] = [sum(Rewards_plot_tracker_per_runner_arg_steps[key])/self.num_steps_per_env]
+
+            self.success_plot_tracker_per_iteration.extend([sum(Succes_plot_tracker_per_runner_arg_steps)])
 
             mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
             stop = time.time()
@@ -239,8 +255,8 @@ class Runner:
                 with logger.Sync():
                     logger.torch_save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
                     logger.duplicate(f"checkpoints/ac_weights_{it:06d}.pt", f"checkpoints/ac_weights_last.pt")
-                    # made a change below to path
-                    path = './tmp/nav-data'
+
+                    path = './tmp/legged_data'
 
                     os.makedirs(path, exist_ok=True)
 
@@ -259,11 +275,13 @@ class Runner:
 
             self.current_learning_iteration += num_learning_iterations
 
+            # print("*******************************************************************************\n")
+
         with logger.Sync():
             logger.torch_save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
             logger.duplicate(f"checkpoints/ac_weights_{it:06d}.pt", f"checkpoints/ac_weights_last.pt")
 
-            path = './tmp/nav-data'
+            path = './tmp/legged_data'
 
             os.makedirs(path, exist_ok=True)
 
@@ -282,6 +300,7 @@ class Runner:
 
 
     def log_video(self, it):
+        # print("-------THIS IS INSIDE LOG VIDEO------")
         if it - self.last_recording_it >= RunnerArgs.save_video_interval:
             self.env.start_recording()
             if self.env.num_eval_envs > 0:

@@ -25,6 +25,7 @@ class HistoryWrapper(gym.Wrapper):
 
     def get_observations(self):
         obs = self.env.get_observations()
+        # print ("History wrapper :", obs)
         privileged_obs = self.env.get_privileged_observations()
         self.obs_history = torch.cat((self.obs_history[:, self.env.num_obs:], obs), dim=-1)
         return {'obs': obs, 'privileged_obs': privileged_obs, 'obs_history': self.obs_history}
@@ -57,7 +58,7 @@ if __name__ == "__main__":
 
     test_env = gym.make("VelocityTrackingEasyEnv-v0", cfg=Cfg)
     env = HistoryWrapper(test_env)
-
+    # print("This is comming into main function of the History wrapper ISSUE:")
     env.reset()
     action = torch.zeros(test_env.num_envs, 12)
     for i in trange(3):

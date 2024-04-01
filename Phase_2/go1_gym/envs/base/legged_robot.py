@@ -63,8 +63,11 @@ class LeggedRobot(BaseTask):
         Args:
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
+        # print("Locomotion Step actions:", actions)
+        # print("locomotion actions:", actions)
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        # print("locomotion clip actions :" , self.actions)
         # step physics and render each frame
         self.prev_base_pos = self.base_pos.clone()
         self.prev_base_quat = self.base_quat.clone()
@@ -80,7 +83,7 @@ class LeggedRobot(BaseTask):
             self.gym.refresh_dof_state_tensor(self.sim)
         self.post_physics_step()
 
-        # return clipped obs, clipped states (None), rewards, dones and infos
+
         clip_obs = self.cfg.normalization.clip_observations
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
         if self.privileged_obs_buf is not None:
@@ -133,7 +136,7 @@ class LeggedRobot(BaseTask):
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
 
-        self._render_headless()
+        self.render_headless()
 
     def check_termination(self):
         """ Check if environments need to be reset
@@ -172,7 +175,7 @@ class LeggedRobot(BaseTask):
 
         self._call_train_eval(self._reset_dofs, env_ids)
 
-        self._call_train_eval(self._reset_root_states, env_ids)
+        self._call_train_eval(self.reset_root_states, env_ids)
 
         # reset buffers
         self.last_actions[env_ids] = 0.
@@ -971,7 +974,7 @@ class LeggedRobot(BaseTask):
                                               gymtorch.unwrap_tensor(env_ids_int32 * (num_wall_bodies + 1)) ,
                                               len(env_ids_int32))
 
-    def _reset_root_states(self, env_ids, cfg):
+    def reset_root_states(self, env_ids, cfg):
         """ Resets ROOT states position and velocities of selected environmments
             Sets base position based on the curriculum
             Selects randomized base velocities within -0.5:0.5 [m/s, rad/s]
@@ -994,12 +997,25 @@ class LeggedRobot(BaseTask):
         else:
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
+            if cfg.init_state.randomize_initial_start_state :
+                self.root_states[env_ids, 0:1] += torch_rand_float(cfg.init_state.start_pos_x_range[0],
+                                                                cfg.init_state.start_pos_x_range[1] , (len(env_ids), 1),
+                                                                device=self.device)
+                self.root_states[env_ids, 1:2] += torch_rand_float(cfg.init_state.start_pos_y_range[0],
+                                                                cfg.init_state.start_pos_y_range[1] , (len(env_ids), 1),
+                                                                device=self.device)
+            
 
 
         # base yaws
         init_yaws = torch_rand_float(-cfg.terrain.yaw_init_range,
                                      cfg.terrain.yaw_init_range, (len(env_ids), 1),
                                      device=self.device)
+        if cfg.init_state.randomize_initial_start_state :
+            init_yaws = torch_rand_float(cfg.init_state.start_pos_yaw_range[0],
+                                                                cfg.init_state.start_pos_yaw_range[1] , (len(env_ids), 1),
+                                                                device=self.device)
+        
         quat = quat_from_angle_axis(init_yaws, torch.Tensor([0, 0, 1]).to(self.device))[:, 0, :]
         self.root_states[env_ids, 3:7] = quat
 
@@ -1730,6 +1746,32 @@ class LeggedRobot(BaseTask):
         self.complete_video_frames = []
         self.complete_video_frames_eval = []
 
+    # navigation code camera setup
+    def camera_setup(self , record_video):
+        if record_video:
+            self.camera_props = gymapi.CameraProperties()
+            self.camera_props.width = 360
+            self.camera_props.height = 240
+            self.rendering_camera = self.gym.create_camera_sensor(self.envs[0], self.camera_props)
+            self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(1.5, 1, 3.0),
+                                            gymapi.Vec3(0, 0, 0))
+            if self.eval_cfg is not None:
+                self.rendering_camera_eval = self.gym.create_camera_sensor(self.envs[self.num_train_envs],
+                                                                            self.camera_props)
+                self.gym.set_camera_location(self.rendering_camera_eval, self.envs[self.num_train_envs],
+                                                gymapi.Vec3(1.5, 1, 3.0),
+                                                gymapi.Vec3(0, 0, 0))
+        self.video_writer = None
+        self.video_frames = []
+        self.video_frames_eval = []
+        self.complete_video_frames = []
+        self.complete_video_frames_eval = [] 
+
+    def post_physics_step_record_update(self , record_now):
+        if record_now:
+            self.gym.step_graphics(self.sim)
+            self.gym.render_all_camera_sensors(self.sim)
+
     def render(self, mode="rgb_array"):
         assert mode == "rgb_array"
         origin = self.env_origins[0].clone()
@@ -1742,7 +1784,7 @@ class LeggedRobot(BaseTask):
         w, h = img.shape
         return img.reshape([w, h // 4, 4])
 
-    def _render_headless(self):
+    def render_headless(self):
         if self.record_now and self.complete_video_frames is not None and len(self.complete_video_frames) == 0:
             bx, by, bz = self.root_states[0, 0], self.root_states[0, 1], self.root_states[0, 2]
             self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(bx, by - 1.0, bz + 1.0),

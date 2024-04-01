@@ -17,7 +17,7 @@ class Cfg(PrefixProto, cli=False):
         env_spacing_x = 7   # not used with heightfields/trimeshes
         env_spacing_y = 3
         send_timeouts = True  # send time out information to the algorithm
-        episode_length_s = 20  # episode length in seconds
+        episode_length_s = 5  # episode length in seconds
         observe_vel = True
         observe_only_ang_vel = False
         observe_only_lin_vel = False
@@ -62,6 +62,7 @@ class Cfg(PrefixProto, cli=False):
         priv_observe_halftime_clock_inputs = False
         priv_observe_desired_contact_states = False
         priv_observe_dummy_variable = False
+        
 
     class terrain(PrefixProto, cli=False):
         mesh_type = 'trimesh'  # "heightfield" # none, plane, heightfield or trimesh
@@ -207,6 +208,10 @@ class Cfg(PrefixProto, cli=False):
         ang_vel = [0.0, 0.0, 0.0]  # x,y,z [rad/s]
         # target angles when action = 0.0
         default_joint_angles = {"joint_a": 0., "joint_b": 0.}
+        randomize_initial_start_state = True
+        start_pos_x_range = [0, 0.8]
+        start_pos_y_range = [-0.5 , 0.5]
+        start_pos_yaw_range = [-3.14 , 3.14]
 
     class control(PrefixProto, cli=False):
         control_type = 'actuator_net' #'P'  # P: position, V: velocity, T: torques
