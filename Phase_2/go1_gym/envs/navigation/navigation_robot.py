@@ -15,7 +15,8 @@ from go1_gym.utils.math_utils import quat_apply_yaw, wrap_to_pi, get_scale_shift
 from .navigation_robot_config import Nfg
 
 
-class LeggedRobot(BaseTask):
+# class LeggedRobot(BaseTask):
+class NavRobot:
     def __init__(self, nfg: Nfg, sim_params, physics_engine, sim_device, headless, eval_nfg=None,
                  initial_dynamics_dict=None):
         """ Parses the provided config file,
@@ -640,6 +641,8 @@ class LeggedRobot(BaseTask):
 
             old_bins = self.env_command_bins[env_ids_in_category.cpu().numpy()]
             if len(success_thresholds) > 0:
+                # TODO : should we pass through curriculum to update the rewards for position 
+                # do we need to randomize the position
                 curriculum.update(old_bins, task_rewards, success_thresholds,
                                   local_range=np.array(
                                       [0.55, 0.55, 0.55, 0.55, 0.35, 0.25, 0.25, 0.25, 0.25, 1.0, 1.0, 1.0, 1.0, 1.0,
@@ -1288,7 +1291,7 @@ class LeggedRobot(BaseTask):
         nfg.env.max_episode_length = np.ceil(max_episode_length_s / self.dt)
         self.max_episode_length = nfg.env.max_episode_length
 
-        nfg.domain_rand.push_interval = np.ceil(nfg.domain_rand.push_interval_s / self.dt)
+        # nfg.domain_rand.push_interval = np.ceil(nfg.domain_rand.push_interval_s / self.dt) # used for pushing robots
         nfg.domain_rand.rand_interval = np.ceil(nfg.domain_rand.rand_interval_s / self.dt)
         # nfg.domain_rand.gravity_rand_interval = np.ceil(nfg.domain_rand.gravity_rand_interval_s / self.dt)
         # nfg.domain_rand.gravity_rand_duration = np.ceil(

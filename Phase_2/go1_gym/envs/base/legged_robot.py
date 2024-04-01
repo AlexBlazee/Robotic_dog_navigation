@@ -140,13 +140,16 @@ class LeggedRobot(BaseTask):
         """
         self.reset_buf = torch.any(torch.norm(self.contact_forces[:, self.termination_contact_indices, :], dim=-1) > 1.,
                                    dim=1)
+        self.wall_contact_buf = torch.any(torch.norm(self.wall_contact_forces[:, :, :], dim=-1) > 1.,
+                                   dim=1)
+        self.reset_buf |= self.wall_contact_buf
         self.time_out_buf = self.episode_length_buf > self.cfg.env.max_episode_length  # no terminal reward for time-outs
         self.reset_buf |= self.time_out_buf
         if self.cfg.rewards.use_terminal_body_height:
             self.body_height_buf = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1) \
                                    < self.cfg.rewards.terminal_body_height
             self.reset_buf = torch.logical_or(self.body_height_buf, self.reset_buf)
-
+        
     def reset_idx(self, env_ids):
         """ Reset some environments.
             Calls self._reset_dofs(env_ids), self._reset_root_states(env_ids), and self._resample_commands(env_ids) and
@@ -168,6 +171,7 @@ class LeggedRobot(BaseTask):
             self._call_train_eval(self.refresh_actor_rigid_shape_props, env_ids)
 
         self._call_train_eval(self._reset_dofs, env_ids)
+
         self._call_train_eval(self._reset_root_states, env_ids)
 
         # reset buffers
@@ -248,18 +252,20 @@ class LeggedRobot(BaseTask):
         if dof_pos is not None:
             self.dof_pos[env_ids] = dof_pos
             self.dof_vel[env_ids] = 0.
-
+            num_wall_bodies = 4
             self.gym.set_dof_state_tensor_indexed(self.sim,
                                                   gymtorch.unwrap_tensor(self.dof_state),
-                                                  gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+                                                  gymtorch.unwrap_tensor(env_ids_int32 *(num_wall_bodies + 1)),
+                                                   len(env_ids_int32))
 
         # base position
         self.root_states[env_ids] = base_state.to(self.device)
-        
+        num_wall_bodies = 4
         # Todo : Update only the robot details here
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self._merge_anymal_root_state_with_wall_root_state()),
-                                                     gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+                                                     gymtorch.unwrap_tensor(env_ids_int32 * (num_wall_bodies +1 )),
+                                                     len(env_ids_int32))
 
     def compute_reward(self):
         """ Compute rewards
@@ -734,6 +740,7 @@ class LeggedRobot(BaseTask):
 
             old_bins = self.env_command_bins[env_ids_in_category.cpu().numpy()]
             if len(success_thresholds) > 0:
+                # TODO : should the position tracking pass through this curriculum and should we bin it 
                 curriculum.update(old_bins, task_rewards, success_thresholds,
                                   local_range=np.array(
                                       [0.55, 0.55, 0.55, 0.55, 0.35, 0.25, 0.25, 0.25, 0.25, 1.0, 1.0, 1.0, 1.0, 1.0,
@@ -819,7 +826,6 @@ class LeggedRobot(BaseTask):
 
         # setting the smaller commands to zero
         self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
-
         # reset command sums
         for key in self.command_sums.keys():
             self.command_sums[key][env_ids] = 0.
@@ -959,9 +965,11 @@ class LeggedRobot(BaseTask):
         self.dof_vel[env_ids] = 0.
 
         env_ids_int32 = env_ids.to(dtype=torch.int32)
+        num_wall_bodies = 4 
         self.gym.set_dof_state_tensor_indexed(self.sim,
                                               gymtorch.unwrap_tensor(self.dof_state),
-                                              gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+                                              gymtorch.unwrap_tensor(env_ids_int32 * (num_wall_bodies + 1)) ,
+                                              len(env_ids_int32))
 
     def _reset_root_states(self, env_ids, cfg):
         """ Resets ROOT states position and velocities of selected environmments
@@ -971,6 +979,7 @@ class LeggedRobot(BaseTask):
             env_ids (List[int]): Environemnt ids
         """
         # base position
+
         if self.custom_origins:
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
@@ -986,6 +995,7 @@ class LeggedRobot(BaseTask):
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
 
+
         # base yaws
         init_yaws = torch_rand_float(-cfg.terrain.yaw_init_range,
                                      cfg.terrain.yaw_init_range, (len(env_ids), 1),
@@ -994,13 +1004,15 @@ class LeggedRobot(BaseTask):
         self.root_states[env_ids, 3:7] = quat
 
         # base velocities
-        self.root_states[env_ids, 7:13] = torch_rand_float(-0.5, 0.5, (len(env_ids), 6),
+        self.root_states[env_ids, 7:13] = torch_rand_float(-0.1, 0.1, (len(env_ids), 6),
                                                            device=self.device)  # [7:10]: lin vel, [10:13]: ang vel
         env_ids_int32 = env_ids.to(dtype=torch.int32)
         # Todo should you update the robot states here
+        num_wall_bodies = 4
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self._merge_anymal_root_state_with_wall_root_state()),
-                                                     gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+                                                     gymtorch.unwrap_tensor(env_ids_int32 *(num_wall_bodies +1)),
+                                                     len(env_ids_int32))
 
         if cfg.env.record_video and 0 in env_ids:
             if self.complete_video_frames is None:
@@ -1135,7 +1147,7 @@ class LeggedRobot(BaseTask):
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
-
+        num_wall_bodies = 4
         # create some wrapper tensors for different slices
         # self.root_states = gymtorch.wrap_tensor(actor_root_state)
         # print( "INIT BUFFER dof_state tensor :::::: " , self.root_states )
@@ -1145,11 +1157,7 @@ class LeggedRobot(BaseTask):
             self.wall_root_state = torch.cat((self.wall_root_state , gymtorch.wrap_tensor(actor_root_state)[i::5]))        
         # similarly update the dof state
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
-        # self.wall_dof_state = gymtorch.wrap_tensor(dof_state_tensor)[1::5]
-        # for i in range(2, 5):
-        #     self.wall_dof_state = torch.cat((self.wall_dof_state , gymtorch.wrap_tensor(dof_state_tensor)[i::5]))       
-
-        self.net_contact_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * self.num_bodies, :]
+        self.net_contact_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * (self.num_bodies + num_wall_bodies), :]
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.base_pos = self.root_states[:self.num_envs, 0:3]
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
@@ -1164,9 +1172,18 @@ class LeggedRobot(BaseTask):
         self.prev_foot_velocities = self.foot_velocities.clone()
 
         self.lag_buffer = [torch.zeros_like(self.dof_pos) for i in range(self.cfg.domain_rand.lag_timesteps+1)]
+    
+        # for i in range(0, self.num_bodies):
+        #     self.wall_root_state = torch.cat((self.wall_root_state , gymtorch.wrap_tensor(actor_root_state)[i::5])) 
 
-        self.contact_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * self.num_bodies, :].view(self.num_envs, -1,
+        # for i in range(2, 5):
+        #     self.wall_root_state = torch.cat((self.wall_root_state , gymtorch.wrap_tensor(actor_root_state)[i::5])) 
+
+        intermediate_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * (self.num_bodies + num_wall_bodies), :].view(self.num_envs, -1,
                                                                             3)  # shape: num_envs, num_bodies, xyz axis
+        
+        self.contact_forces = intermediate_forces[:,:self.num_bodies,:]
+        self.wall_contact_forces = intermediate_forces[:,self.num_bodies:,:]
 
         # initialize some data used later on
         self.common_step_counter = 0
@@ -1510,21 +1527,19 @@ class LeggedRobot(BaseTask):
     #     resTorch = torch.empty([len(res) , res[0].size()[0]] , device = self.device)
     #     return torch.stack(res , out = resTorch)
 
-    def _add_boundary_walls_to_env(self , env_handle , i , pos) :
+    def _add_boundary_walls_to_env(self , env_handle , i , origins) :
         asset_options = gymapi.AssetOptions()
         wall_thickness = 0.1
         side_wall_length = 5
-        wall_height = 3
+        wall_height = 2
         asset_options.fix_base_link = True
         asset_box1 = self.gym.create_box(self.sim, side_wall_length , wall_thickness , wall_height , asset_options)
         asset_box2 = self.gym.create_box(self.sim, 2*wall_thickness + 2 ,  wall_thickness , wall_height, asset_options)
     
-        # box_refernce_pos = self.base_init_state_list[:3]
-        # print(" base init state", self.base_init_state_list[:3])
-        # print(" root state" , self.root_states)
+
         # add box actor
         pose = gymapi.Transform()
-        left_wall_pos = torch.tensor([ 1.5 , -1 - wall_thickness/2  , 1] , device=self.device)  + pos
+        left_wall_pos = torch.tensor([ 1.5 , -1 - wall_thickness/2  , 1] , device=self.device)  + origins
         pose.p = gymapi.Vec3(*left_wall_pos)
         pose.r = gymapi.Quat(0, 0, 0, 1)
         box_handle1 = self.gym.create_actor(env_handle, asset_box1, pose, "leftwall", i, 0)
@@ -1532,28 +1547,25 @@ class LeggedRobot(BaseTask):
 
         # set restitution for box actor
         shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle1)
-        shape_props[0].restitution = 1
         shape_props[0].compliance = 0.1
         self.gym.set_actor_rigid_shape_properties(env_handle, box_handle1, shape_props)
 
         #adding second box
         pose = gymapi.Transform()
-        right_wall_pos = torch.tensor([1.5 , 1 + wall_thickness/2  ,1  ] , device = self.device) + pos
+        right_wall_pos = torch.tensor([1.5 , 1 + wall_thickness/2  ,1  ] , device = self.device) + origins
         pose.p = gymapi.Vec3(*right_wall_pos)
         pose.r = gymapi.Quat(0, 0, 0, 1)
-        print(pose.r.x,pose.r.y,pose.r.z,pose.r.w)
         box_handle2 = self.gym.create_actor(env_handle, asset_box1, pose, "rightwall", i, 0)
         self.actor_handles.append(box_handle2)
 
         # set restitution for box actor
         shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle2)
-        shape_props[0].restitution = 1
         shape_props[0].compliance = 0.1
         self.gym.set_actor_rigid_shape_properties(env_handle, box_handle2, shape_props)
 
         # #adding thrid box
         pose = gymapi.Transform()
-        back_wall_pos = torch.tensor([ -1 - wall_thickness/2, 0 , 1 ] , device = self.device) + pos 
+        back_wall_pos = torch.tensor([ -1 - wall_thickness/2, 0 , 1 ] , device = self.device) + origins 
         pose.p = gymapi.Vec3(*back_wall_pos)
         pose.r = gymapi.Quat(0, 0, 0.707, 0.707)
         box_handle3 = self.gym.create_actor(env_handle, asset_box2, pose, "backwall", i, 0)
@@ -1561,13 +1573,12 @@ class LeggedRobot(BaseTask):
 
         # set restitution for box actor
         shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle3)
-        shape_props[0].restitution = 1
         shape_props[0].compliance = 0.1
         self.gym.set_actor_rigid_shape_properties(env_handle, box_handle3, shape_props)
 
         #adding fourth box
         pose = gymapi.Transform()
-        front_wall_pos = torch.tensor([4 + wall_thickness/2, 0 , 1] , device = self.device)  + pos
+        front_wall_pos = torch.tensor([4 + wall_thickness/2, 0 , 1] , device = self.device)  + origins
         pose.p = gymapi.Vec3(*front_wall_pos)
         pose.r = gymapi.Quat(0, 0, 0.707, 0.707)
         box_handle4 = self.gym.create_actor(env_handle, asset_box2, pose, "frontwall", i, 0)
@@ -1575,7 +1586,6 @@ class LeggedRobot(BaseTask):
 
         # set restitution for box actor
         shape_props = self.gym.get_actor_rigid_shape_properties(env_handle, box_handle4)
-        shape_props[0].restitution = 1
         shape_props[0].compliance = 0.1
         self.gym.set_actor_rigid_shape_properties(env_handle, box_handle4, shape_props)
 
@@ -1669,9 +1679,11 @@ class LeggedRobot(BaseTask):
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, anymal_handle)
             body_props = self._process_rigid_body_props(body_props, i)
             self.gym.set_actor_rigid_body_properties(env_handle, anymal_handle, body_props, recomputeInertia=True)
-            self.envs.append(env_handle)
+            # self.envs.append(env_handle)
             self.actor_handles.append(anymal_handle)
-            self._add_boundary_walls_to_env(env_handle , i , pos)   
+            self._add_boundary_walls_to_env(env_handle , i , self.env_origins[i].clone())
+            self.envs.append(env_handle)
+               
 
         self.feet_indices = torch.zeros(len(feet_names), dtype=torch.long, device=self.device, requires_grad=False)
         for i in range(len(feet_names)):
@@ -1685,13 +1697,19 @@ class LeggedRobot(BaseTask):
                                                                                       self.actor_handles[0],
                                                                                       penalized_contact_names[i])
         # adding walls to the termination on contact list
-        # termination_contact_names.extend(["leftwall" , "rightwall" , "backwall" , "frontwall"])        
+        # termination_contact_names.extend(["leftwall" , "rightwall" , "backwall" , "frontwall"])
+        num_walls = 4       
         self.termination_contact_indices = torch.zeros(len(termination_contact_names), dtype=torch.long,
                                                        device=self.device, requires_grad=False)
         for i in range(len(termination_contact_names)):
             self.termination_contact_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0],
-                                                                                        self.actor_handles[0],
-                                                                                        termination_contact_names[i])
+                                                                                            self.actor_handles[0],termination_contact_names[i])
+        self.wall_contact_indices = [x for x in range(num_walls)]
+        
+        # print("_create_envs find_actor_rigid_body_handle" , self.gym.find_actor_rigid_body_handle(self.envs[0], 
+        #                 self.actor_handles[0] , termination_contact_names[1]))
+        # print(f"Actor handles: {self.actor_handles}")
+        
         # if recording video, set up camera
         if self.cfg.env.record_video:
             self.camera_props = gymapi.CameraProperties()
@@ -1824,10 +1842,10 @@ class LeggedRobot(BaseTask):
             # create a grid of robots
             num_cols = np.floor(np.sqrt(len(env_ids)))
             num_rows = np.ceil(self.num_envs / num_cols)
-            xx, yy = torch.meshgrid(torch.arange(num_rows), torch.arange(num_cols))
-            spacing = cfg.env.env_spacing
-            self.env_origins[env_ids, 0] = spacing * xx.flatten()[:len(env_ids)]
-            self.env_origins[env_ids, 1] = spacing * yy.flatten()[:len(env_ids)]
+            xx, yy = torch.meshgrid(torch.arange(num_rows , device = self.device ), torch.arange(num_cols , device = self.device))
+            spacing_x,spacing_y  = cfg.env.env_spacing_x , cfg.env.env_spacing_y 
+            self.env_origins[env_ids, 0] = spacing_x * xx.flatten()[:len(env_ids)]
+            self.env_origins[env_ids, 1] = spacing_y * yy.flatten()[:len(env_ids)]
             self.env_origins[env_ids, 2] = 0.
 
     def _parse_cfg(self, cfg):

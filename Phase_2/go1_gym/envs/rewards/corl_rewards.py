@@ -12,6 +12,11 @@ class CoRLRewards:
         self.env = env
 
     # ------------ reward functions----------------
+    def __reward_tracking_lin_pos(self):
+        # Tracking of linear velocity commands (xy axes)
+        lin_pos_error = torch.sum(torch.square(self.env.commands[:, :2] - self.env.base_pos[:, :2]), dim=1)
+        return torch.exp(-lin_pos_error / self.env.cfg.rewards.tracking_sigma)
+
     def _reward_tracking_lin_vel(self):
         # Tracking of linear velocity commands (xy axes)
         lin_vel_error = torch.sum(torch.square(self.env.commands[:, :2] - self.env.base_lin_vel[:, :2]), dim=1)
