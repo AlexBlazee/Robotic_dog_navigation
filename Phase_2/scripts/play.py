@@ -58,11 +58,12 @@ def load_env(label, headless=False):
     Cfg.domain_rand.randomize_Kp_factor = False
     Cfg.domain_rand.randomize_joint_friction = False
     Cfg.domain_rand.randomize_com_displacement = False
+    # Cfg.domain_rand.randomize_rigids_after_start = False
 
     Cfg.env.num_recording_envs = 1
-    Cfg.env.num_train_envs = 1
+    Cfg.env.num_train_envs = 4
     Cfg.env.num_eval_envs = 0
-    Cfg.env.num_envs = 1
+    Cfg.env.num_envs = 4
     # Cfg.record_video = True
     # Cfg.record_eval_now = False
     Cfg.recording_width_px = 368*2
@@ -74,7 +75,7 @@ def load_env(label, headless=False):
     Cfg.terrain.border_size = 0
     Cfg.terrain.center_robots = True
     Cfg.terrain.center_span = 1
-    Cfg.terrain.teleport_robots = True
+    Cfg.terrain.teleport_robots = False
 
     Cfg.domain_rand.lag_timesteps = 6
     Cfg.domain_rand.randomize_lag_timesteps = True
@@ -84,6 +85,7 @@ def load_env(label, headless=False):
     Cfg.terrain.y_init_range = 0
     Cfg.terrain.yaw_init_range = 0
     Cfg.terrain.mesh_type = 'plane'
+
 
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
@@ -111,7 +113,7 @@ def play_go1(headless=True):
 
     env, policy = load_env(label, headless=headless)
 
-    num_eval_steps = 2000
+    num_eval_steps = 500
     gaits = {"pronking": [0, 0, 0],
              "trotting": [0.5, 0, 0],
              "bounding": [0, 0.5, 0],
@@ -120,10 +122,10 @@ def play_go1(headless=True):
     y_vel_cmd_array = np.zeros(num_eval_steps)
     yaw_vel_cmd_array = np.zeros(num_eval_steps)
     for i in range(num_eval_steps):
-        if i<1000:
-            x_vel_cmd_array[i] = 0.2
+        if i<250:
+            x_vel_cmd_array[i] = 1.0
         else:
-            x_vel_cmd_array[i] = -0.1
+            x_vel_cmd_array[i] = -0.5
 
         # if i<100:
         #     x_vel_cmd_array[i] = 0.4
@@ -139,7 +141,7 @@ def play_go1(headless=True):
     # x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 1.5, 0.0, 0.0
     body_height_cmd = 0.0
     step_frequency_cmd = 3.0
-    gait = torch.tensor(gaits["trotting"])
+    gait = torch.tensor(gaits["pacing"])
     footswing_height_cmd = 0.08
     pitch_cmd = 0.0
     roll_cmd = 0.0
@@ -173,6 +175,7 @@ def play_go1(headless=True):
         env.commands[:, 11] = roll_cmd
         env.commands[:, 12] = stance_width_cmd
         obs, rew, done, info = env.step(actions)
+        print("BUFFERS :", obs , rew, done , info )
 
         measured_x_vels[i] = env.base_lin_vel[0, 0]
         measured_y_vels[i] = env.base_lin_vel[0 ,1]

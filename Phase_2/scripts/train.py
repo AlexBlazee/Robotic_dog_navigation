@@ -196,7 +196,7 @@ def train_go1(headless=True):
 
     Cfg.normalization.friction_range = [0, 1]
     Cfg.normalization.ground_friction_range = [0, 1]
-    Cfg.terrain.yaw_init_range = 3.14
+    Cfg.terrain.yaw_init_range = 0 #3.14
     Cfg.normalization.clip_actions = 10.0
 
     Cfg.commands.exclusive_phase_offset = False
