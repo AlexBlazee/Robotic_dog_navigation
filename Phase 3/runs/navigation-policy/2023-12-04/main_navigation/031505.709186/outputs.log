@@ -1,0 +1,60 @@
+══════════════════════════════════════════
+[33m      AC_Args       [0m
+────────────────────┬─────────────────────
+   init_noise_std   │ 1.0                 
+ actor_hidden_dims  │ [512, 256, 128]     
+ critic_hidden_dims │ [512, 256, 128]     
+     activation     │ elu                 
+adaptation_module_branch_hidden_dims│ [256, 128]          
+    use_decoder     │ False               
+════════════════════╧═════════════════════
+[33m      PPO_Args      [0m
+────────────────────┬─────────────────────
+  value_loss_coef   │ 1.0                 
+use_clipped_value_loss│ True                
+     clip_param     │ 0.2                 
+    entropy_coef    │ 0.01                
+num_learning_epochs │ 5                   
+  num_mini_batches  │ 4                   
+   learning_rate    │ 0.001               
+adaptation_module_learning_rate│ 0.001               
+num_adaptation_module_substeps│ 1                   
+      schedule      │ adaptive            
+       gamma        │ 0.99                
+        lam         │ 0.95                
+     desired_kl     │ 0.01                
+   max_grad_norm    │ 1.0                 
+selective_adaptation_module_loss│ False               
+════════════════════╧═════════════════════
+[33m     RunnerArgs     [0m
+────────────────────┬─────────────────────
+algorithm_class_name│ RMA                 
+ num_steps_per_env  │ 24                  
+   max_iterations   │ 1500                
+   save_interval    │ 400                 
+save_video_interval │ 100                 
+      log_freq      │ 10                  
+       resume       │ False               
+      load_run      │ -1                  
+     checkpoint     │ -1                  
+    resume_path     │ None                
+ resume_curriculum  │ False               
+════════════════════╧═════════════════════
+[33m        Cfg         [0m
+────────────────────┬─────────────────────
+        env         │ {'num_envs': 2, 'num_observations': 10, 'num_scalar_observations': 10, 'num_privileged_obs': 0, 'num_actions': 3, 'num_observation_history': 30, 'send_timeouts': True, 'episode_length_s': 15, 'observe_pos': True, 'observe_only_lin_pos': False, 'observe_two_prev_actions': True, 'observe_yaw': True, 'observe_command': True, 'observe_timing_parameter': False, 'observe_clock_inputs': False, 'record_video': True, 'recording_width_px': 368, 'recording_height_px': 240, 'recording_mode': 'COLOR', 'num_recording_envs': 1, 'debug_viz': False, 'all_agents_share': False, 'priv_observe_body_position': False, 'priv_observe_clock_inputs': False, 'priv_observe_doubletime_clock_inputs': False, 'priv_observe_halftime_clock_inputs': False, 'priv_observe_dummy_variable': False, 'max_episode_length': 751.0}
+      terrain       │ {'mesh_type': 'plane', 'horizontal_scale': 0.1, 'vertical_scale': 0.005, 'curriculum': False, 'terrain_noise_magnitude': 0.1, 'terrain_smoothness': 0.005, 'measure_heights': False, 'measured_points_x': [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8], 'measured_points_y': [-0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5], 'selected': False, 'terrain_kwargs': None, 'min_init_terrain_level': 0, 'max_init_terrain_level': 5, 'terrain_length': 8.0, 'terrain_width': 8.0, 'num_rows': 10, 'num_cols': 20, 'terrain_proportions': [0.1, 0.1, 0.35, 0.25, 0.2], 'slope_treshold': 0.75, 'difficulty_scale': 1.0, 'x_init_range': 1.0, 'y_init_range': 1.0, 'yaw_init_range': 0.0, 'x_init_offset': 0.0, 'y_init_offset': 0.0, 'teleport_robots': True, 'teleport_thresh': 2.0, 'max_platform_height': 0.2, 'center_robots': False, 'center_span': 5}
+      commands      │ {'command_curriculum': False, 'yaw_command_curriculum': False, 'max_yaw_curriculum': 1.0, 'exclusive_command_sampling': False, 'num_commands': 2, 'resampling_time': 10.0, 'subsample_gait': False, 'gait_interval_s': 10.0, 'vel_interval_s': 10.0, 'heading_command': True, 'global_reference': False, 'observe_accel': False, 'distributional_commands': False, 'curriculum_type': 'RewardThresholdCurriculum', 'lipschitz_threshold': 0.9, 'num_lin_pos_bins': 30, 'lin_pos_step': 0.2, 'distribution_update_extension_distance': 1, 'curriculum_seed': 100, 'lin_pos_x': [-0.2, 0.2], 'lin_pos_y': [-0.2, 0.2], 'limit_pos_x': [0, 3.5], 'limit_pos_y': [-1, 1], 'num_bins_pos_x': 15, 'num_bins_pos_y': 8, 'heading': [-3.14, 3.14], 'exclusive_phase_offset': True, 'binary_phases': False, 'pacing_offset': False, 'balance_gait_distribution': True, 'gaitwise_curricula': False}
+curriculum_thresholds│ {'tracking_lin_pos': 0.8}
+     init_state     │ {'pos': [0.0, 0.0, 1.0], 'rot': [0.0, 0.0, 0.0, 1.0], 'lin_vel': [0.0, 0.0, 0.0], 'ang_vel': [0.0, 0.0, 0.0], 'default_joint_angles': {'joint_a': 0.0, 'joint_b': 0.0}}
+      control       │ {'action_scale': 0.5, 'decimation': 4}
+    domain_rand     │ {'rand_interval_s': 10, 'restitution_range': [0, 1.0], 'com_displacement_range': [-0.15, 0.15], 'randomize_lag_timesteps': True, 'lag_timesteps': 6}
+      rewards       │ {'only_positive_rewards': True, 'only_positive_rewards_ji22_style': False, 'sigma_rew_neg': 5, 'reward_container_name': 'CoRLRewards', 'tracking_sigma': 0.25, 'tracking_sigma_lat': 0.25, 'tracking_sigma_long': 0.25, 'tracking_sigma_yaw': 0.25, 'soft_dof_pos_limit': 1.0, 'soft_dof_vel_limit': 1.0, 'soft_torque_limit': 1.0}
+   reward_scales    │ {'termination': -0.0, 'tracking_lin_pos': 1000, 'goal_body_alignment': 0, 'orientation': -0.0, 'action_rate': 0, 'stand_still': -0.0, 'energy': 0.0, 'energy_expenditure': 0.0, 'survival': 0.0, 'dof_pos_limits': 0.0, 'dof_pos': 0.0, 'action_pos_smoothness': 0, 'action_magnitude': 1, 'action_pos_smoothness_2': 0, 'raibert_heuristic': 0.0}
+   normalization    │ {'clip_observations': 100.0, 'clip_actions': 1}
+     obs_scales     │ {'lin_pos': 1.0, 'orientation': 0.25, 'compliance_cmd': 1.0, 'segmentation_image': 1.0, 'rgb_image': 1.0, 'depth_image': 1.0}
+       noise        │ {'add_noise': True, 'noise_level': 0.5}
+    noise_scales    │ {'lin_pos': 0.05, 'segmentation_image': 0.0, 'rgb_image': 0.0, 'depth_image': 0.0}
+        sim         │ {'dt': 0.005, 'substeps': 1, 'gravity': [0.0, 0.0, -9.81], 'up_axis': 1, 'use_gpu_pipeline': True, 'physx': {'num_threads': 10, 'solver_type': 1, 'num_position_iterations': 4, 'num_velocity_iterations': 0, 'contact_offset': 0.01, 'rest_offset': 0.0, 'bounce_threshold_velocity': 0.5, 'max_depenetration_velocity': 1.0, 'max_gpu_contact_pairs': 8388608, 'default_buffer_size_multiplier': 5, 'contact_collection': 2}}
+   command_ranges   │ {'command_curriculum': False, 'yaw_command_curriculum': False, 'max_yaw_curriculum': 1.0, 'exclusive_command_sampling': False, 'num_commands': 2, 'resampling_time': 10.0, 'subsample_gait': False, 'gait_interval_s': 10.0, 'vel_interval_s': 10.0, 'heading_command': True, 'global_reference': False, 'observe_accel': False, 'distributional_commands': False, 'curriculum_type': 'RewardThresholdCurriculum', 'lipschitz_threshold': 0.9, 'num_lin_pos_bins': 30, 'lin_pos_step': 0.2, 'distribution_update_extension_distance': 1, 'curriculum_seed': 100, 'lin_pos_x': [-0.2, 0.2], 'lin_pos_y': [-0.2, 0.2], 'limit_pos_x': [0, 3.5], 'limit_pos_y': [-1, 1], 'num_bins_pos_x': 15, 'num_bins_pos_y': 8, 'heading': [-3.14, 3.14], 'exclusive_phase_offset': True, 'binary_phases': False, 'pacing_offset': False, 'balance_gait_distribution': True, 'gaitwise_curricula': False}
+════════════════════╧═════════════════════
