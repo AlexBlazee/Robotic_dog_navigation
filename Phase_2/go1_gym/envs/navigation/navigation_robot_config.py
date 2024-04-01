@@ -2,28 +2,29 @@
 
 from params_proto import PrefixProto, ParamsProto
 
-# TODO : merge both files from mail and this 
-class Cfg(PrefixProto, cli=False):
+
+class Nfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
-        num_envs = 4
-        num_observations = 15
-        num_scalar_observations = 15
+        num_envs = 4096
+        num_observations = 235
+        num_scalar_observations = 42
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
-        num_privileged_obs = 0
+        num_privileged_obs = 18
+        privileged_future_horizon = 1
         # num_actions = 12
         num_actions = 3  # ***
-        num_observation_history = 30
-        # env_spacing = 3.  # not used with heightfields/trimeshes
+        num_observation_history = 15
+        env_spacing = 3.  # not used with heightfields/trimeshes
         send_timeouts = True  # send time out information to the algorithm
-        episode_length_s = 15  # episode length in seconds
+        episode_length_s = 20  # episode length in seconds
         
         # observe_vel = True
         observe_pos = True  # ***
         # observe_only_ang_vel = False
         # observe_only_lin_vel = False
         observe_only_lin_pos = False # ***
-        observe_two_prev_actions = True
-        observe_yaw = True
+
+        observe_yaw = False
 
         # observe_contact_states = False
         observe_command = True
@@ -31,6 +32,7 @@ class Cfg(PrefixProto, cli=False):
         # observe_gait_commands = False
         observe_timing_parameter = False
         observe_clock_inputs = False
+        observe_two_prev_actions = False
         # observe_imu = False
         record_video = True
         recording_width_px = 368
@@ -66,56 +68,14 @@ class Cfg(PrefixProto, cli=False):
         # priv_observe_desired_contact_states = False
         priv_observe_dummy_variable = False
 
-
-    class terrain(PrefixProto, cli=False):
-        mesh_type = 'plane'  # "heightfield" # none, plane, heightfield or trimesh
-        horizontal_scale = 0.1  # [m]
-        vertical_scale = 0.005  # [m]
-        # border_size = 0  # 25 # [m]
-        curriculum = True
-        # static_friction = 1.0
-        # dynamic_friction = 1.0
-        # restitution = 0.0
-        terrain_noise_magnitude = 0.1
-        # rough terrain only:
-        terrain_smoothness = 0.005
-        measure_heights = False
-        # 1mx1.6m rectangle (without center line)
-        measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-        measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
-        selected = False  # select a unique terrain type and pass all arguments
-        terrain_kwargs = None  # Dict of arguments for selected terrain
-        min_init_terrain_level = 0
-        max_init_terrain_level = 5  # starting curriculum state
-        terrain_length = 8.
-        terrain_width = 8.
-        num_rows = 10  # number of terrain rows (levels)
-        num_cols = 20  # number of terrain cols (types)
-        # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
-        # trimesh only:
-        slope_treshold = 0.75  # slopes above this threshold will be corrected to vertical surfaces
-        difficulty_scale = 1.
-        x_init_range = 1.
-        y_init_range = 1.
-        yaw_init_range = 0.
-        x_init_offset = 0.
-        y_init_offset = 0.
-        teleport_robots = True
-        teleport_thresh = 2.0
-        max_platform_height = 0.2
-        center_robots = False
-        center_span = 5
-
-
     class commands(PrefixProto, cli=False):
-        command_curriculum = True
-        # max_reverse_curriculum = 1.
-        # max_forward_curriculum = 1.
+        command_curriculum = False
+        max_reverse_curriculum = 1.
+        max_forward_curriculum = 1.
         yaw_command_curriculum = False
         max_yaw_curriculum = 1.
         exclusive_command_sampling = False
-        num_commands = 2
+        num_commands = 3
         resampling_time = 10.  # time before command are changed[s]
         subsample_gait = False
         gait_interval_s = 10.  # time between resampling gait params
@@ -130,30 +90,22 @@ class Cfg(PrefixProto, cli=False):
         curriculum_type = "RewardThresholdCurriculum"
         lipschitz_threshold = 0.9
 
-        num_lin_pos_bins = 30
-        lin_pos_step = 0.2
-        # num_lin_vel_bins = 20
-        # lin_vel_step = 0.3
-        # num_ang_vel_bins = 20
-        # ang_vel_step = 0.3
+        num_lin_vel_bins = 20
+        lin_vel_step = 0.3
+        num_ang_vel_bins = 20
+        ang_vel_step = 0.3
         distribution_update_extension_distance = 1
         curriculum_seed = 100
 
-        lin_pos_x = [-0.2 , 0.2]
-        lin_pos_y = [-0.1 , 0.1]
-        # TODO : orientation is not required here
-
-        # lin_vel_x = [-1.0, 1.0]  # min max [m/s]
-        # lin_vel_y = [-1.0, 1.0]  # min max [m/s]
-        # ang_vel_yaw = [-1, 1]  # min max [rad/s]
+        lin_vel_x = [-1.0, 1.0]  # min max [m/s]
+        lin_vel_y = [-1.0, 1.0]  # min max [m/s]
+        ang_vel_yaw = [-1, 1]  # min max [rad/s]
         # body_height_cmd = [-0.05, 0.05]
         # impulse_height_commands = False
 
-        limit_pos_x = [-0.5 , 3.5]
-        limit_pos_y = [-1 , 1]
-        # limit_vel_x = [-10.0, 10.0]
-        # limit_vel_y = [-0.6, 0.6]
-        # limit_vel_yaw = [-10.0, 10.0]
+        limit_vel_x = [-10.0, 10.0]
+        limit_vel_y = [-0.6, 0.6]
+        limit_vel_yaw = [-10.0, 10.0]
         # limit_body_height = [-0.05, 0.05]
         # limit_gait_phase = [0, 0.01]
         # limit_gait_offset = [0, 0.01]
@@ -163,16 +115,14 @@ class Cfg(PrefixProto, cli=False):
         # limit_footswing_height = [0.06, 0.061]
         # limit_body_pitch = [0.0, 0.01]
         # limit_body_roll = [0.0, 0.01]
-        # limit_aux_reward_coef = [0.0, 0.01]
+        limit_aux_reward_coef = [0.0, 0.01]
         # limit_compliance = [0.0, 0.01]
         # limit_stance_width = [0.0, 0.01]
         # limit_stance_length = [0.0, 0.01]
 
-        num_bins_pos_x = 21
-        num_bins_pos_y = 5
-        # num_bins_vel_x = 25
-        # num_bins_vel_y = 3
-        # num_bins_vel_yaw = 25
+        num_bins_vel_x = 25
+        num_bins_vel_y = 3
+        num_bins_vel_yaw = 25
         # num_bins_body_height = 1
         # num_bins_gait_frequency = 11
         # num_bins_gait_phase = 11
@@ -192,9 +142,9 @@ class Cfg(PrefixProto, cli=False):
 
         # gait_phase_cmd_range = [0.0, 0.01]
         # gait_offset_cmd_range = [0.0, 0.01]
-        # gait_bound_cmd_range = [0.0, 0.01]
-        # gait_frequency_cmd_range = [2.0, 2.01]
-        # gait_duration_cmd_range = [0.49, 0.5]
+        gait_bound_cmd_range = [0.0, 0.01]
+        gait_frequency_cmd_range = [2.0, 2.01]
+        gait_duration_cmd_range = [0.49, 0.5]
         # footswing_height_range = [0.06, 0.061]
         # body_pitch_range = [0.0, 0.01]
         # body_roll_range = [0.0, 0.01]
@@ -203,18 +153,17 @@ class Cfg(PrefixProto, cli=False):
         # stance_width_range = [0.0, 0.01]
         # stance_length_range = [0.0, 0.01]
 
-        exclusive_phase_offset = True
-        binary_phases = False
-        pacing_offset = False
-        balance_gait_distribution = True
-        gaitwise_curricula = False
+        # exclusive_phase_offset = True
+        # binary_phases = False
+        # pacing_offset = False
+        # balance_gait_distribution = True
+        # gaitwise_curricula = True
 
-# TODO : verified
     class curriculum_thresholds(PrefixProto, cli=False):
         # tracking_lin_vel = 0.8  # closer to 1 is tighter
-        tracking_lin_pos= 0.8 # ***
+        tracking_lin_position = 0.8 # ***
         # tracking_ang_vel = 0.5
-        # tracking_yaw = 0.5 # ***
+        tracking_yaw = 0.5 # ***
         # tracking_contacts_shaped_force = 0.8  # closer to 1 is tighter
         # tracking_contacts_shaped_vel = 0.8
 
@@ -226,7 +175,6 @@ class Cfg(PrefixProto, cli=False):
         # target angles when action = 0.0
         default_joint_angles = {"joint_a": 0., "joint_b": 0.}
 
-#TODO : verified
     class control(PrefixProto, cli=False):
         # control_type = 'actuator_net' #'P'  # P: position, V: velocity, T: torques
         # # PD Drive parameters:
@@ -320,12 +268,11 @@ class Cfg(PrefixProto, cli=False):
     
         termination = -0.0
         # tracking_lin_vel = 1.0
-        tracking_lin_pos = 0.8 # ***
+        tracking_lin_position = 1.0 # ***
         # tracking_ang_vel = 0.5
         # lin_vel_z = -2.0
         # ang_vel_xy = -0.05
         orientation = -0.
-        action_rate = -0.01
         # torques = -0.00001
         # dof_vel = -0.
         # dof_acc = -2.5e-7
@@ -336,9 +283,9 @@ class Cfg(PrefixProto, cli=False):
         # action_rate = -0.01
         stand_still = -0.
         # tracking_lin_vel_lat = 0.
-        # tracking_lin_position_lat = 0. # ***
+        tracking_lin_position_lat = 0. # ***
         # tracking_lin_vel_long = 0.
-        # tracking_lin_position_long = 0. # ***
+        tracking_lin_position_long = 0. # ***
         # tracking_contacts = 0.
         # tracking_contacts_shaped = 0.
         # tracking_contacts_shaped_force = 0.
@@ -352,8 +299,8 @@ class Cfg(PrefixProto, cli=False):
         # feet_slip = 0.
         # feet_clearance_cmd_linear = 0.
         dof_pos = 0.
-        # action_smoothness_1 = 0.
-        # action_smoothness_2 = 0.
+        action_smoothness_1 = 0.
+        action_smoothness_2 = 0.
         # base_motion = 0.
         # feet_impact_vel = 0.0
         raibert_heuristic = 0.0
@@ -397,21 +344,20 @@ class Cfg(PrefixProto, cli=False):
         # footswing_height_cmd = 0.15
         # body_pitch_cmd = 0.3
         # body_roll_cmd = 0.3
-        # aux_reward_cmd = 1.0
+        aux_reward_cmd = 1.0
         compliance_cmd = 1.0
         # stance_width_cmd = 1.0
         # stance_length_cmd = 1.0
-        segmentation_image = 1.0
-        rgb_image = 1.0
-        depth_image = 1.0
+        # segmentation_image = 1.0
+        # rgb_image = 1.0
+        # depth_image = 1.0
 
     class noise(PrefixProto, cli=False):
         add_noise = True
         noise_level = 1.0  # scales other values
 
     class noise_scales(PrefixProto, cli=False):
-        lin_pos = 0.1
-        # dof_pos = 0.01
+        dof_pos = 0.01
         # dof_vel = 1.5
         # lin_vel = 0.1
         # ang_vel = 0.2
@@ -420,9 +366,9 @@ class Cfg(PrefixProto, cli=False):
         # contact_states = 0.05
         # height_measurements = 0.1
         # friction_measurements = 0.0
-        segmentation_image = 0.0
-        rgb_image = 0.0
-        depth_image = 0.0
+        # segmentation_image = 0.0
+        # rgb_image = 0.0
+        # depth_image = 0.0
 
     # viewer camera:
     # class viewer(PrefixProto, cli=False):
@@ -430,23 +376,23 @@ class Cfg(PrefixProto, cli=False):
     #     pos = [10, 0, 6]  # [m]
     #     lookat = [11., 5, 3.]  # [m]
 
-    class sim(PrefixProto, cli=False):
-        dt = 0.005
-        substeps = 1
-        gravity = [0., 0., -9.81]  # [m/s^2]
-        up_axis = 1  # 0 is y, 1 is z
+    # class sim(PrefixProto, cli=False):
+    #     dt = 0.005
+    #     substeps = 1
+    #     gravity = [0., 0., -9.81]  # [m/s^2]
+    #     up_axis = 1  # 0 is y, 1 is z
 
-        use_gpu_pipeline = True
+    #     use_gpu_pipeline = True
 
-        class physx(PrefixProto, cli=False):
-            num_threads = 10
-            solver_type = 1  # 0: pgs, 1: tgs
-            num_position_iterations = 4
-            num_velocity_iterations = 0
-            contact_offset = 0.01  # [m]
-            rest_offset = 0.0  # [m]
-            bounce_threshold_velocity = 0.5  # 0.5 [m/s]
-            max_depenetration_velocity = 1.0
-            max_gpu_contact_pairs = 2 ** 23  # 2**24 -> needed for 8000 envs and more
-            default_buffer_size_multiplier = 5
-            contact_collection = 2  # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
+    #     class physx(PrefixProto, cli=False):
+    #         num_threads = 10
+    #         solver_type = 1  # 0: pgs, 1: tgs
+    #         num_position_iterations = 4
+    #         num_velocity_iterations = 0
+    #         contact_offset = 0.01  # [m]
+    #         rest_offset = 0.0  # [m]
+    #         bounce_threshold_velocity = 0.5  # 0.5 [m/s]
+    #         max_depenetration_velocity = 1.0
+    #         max_gpu_contact_pairs = 2 ** 23  # 2**24 -> needed for 8000 envs and more
+    #         default_buffer_size_multiplier = 5
+    #         contact_collection = 2  # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
